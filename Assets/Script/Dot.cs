@@ -12,12 +12,10 @@ public class Dot : MonoBehaviour
     public float m_targetX;
     public float m_targetY;
 
-    public bool isMatched = false;
-    private bool isStopped = false;
+    public bool m_isMatched = false;
+    public bool m_isStopped = false;
 
-    private Transform m_transform;
-
-    private GameObject[,] backgroundArray;
+    private Board board;
     private GameObject[,] dotsArray;
 
     // Touch Position
@@ -27,34 +25,39 @@ public class Dot : MonoBehaviour
     private float m_angle;
     private float m_swipeResist = 0.5f;
 
-    void Start()
+    private void Start()
     {
-        m_transform = GetComponent<Transform>();
+        board = GameObject.Find("BoardManager").GetComponent<Board>();
+        dotsArray = board.m_dotsArray;
 
-        backgroundArray = GameObject.Find("BoardManager").GetComponent<Board>().m_slotArray;
-        dotsArray = GameObject.Find("BoardManager").GetComponent<Board>().m_dotsArray;
+        m_targetX = transform.position.x;
+        m_targetY = transform.position.y;
 
-        m_targetX = backgroundArray[m_column, m_row].transform.position.x;
-        m_targetY = backgroundArray[m_column, m_row].transform.position.y;
     }
 
-    void Update()
+    private void Update()
     {
         Move();
 
         Disappear();
+
+        board.FindMatch();
     }
 
-    void Move()
+    public void OnEnable()
+    {
+        m_isMatched = false;
+        m_isStopped = false;
+        transform.localScale = new Vector3(1f, 1f, 0);
+    }
+
+    private void Move()
     {
         // Move Towards the target
         if (Mathf.Abs(m_targetX - transform.position.x) > .1)
         {
             Vector3 targetPos = new Vector3(m_targetX, transform.position.y, 0);
             transform.position = Vector3.Lerp(transform.position, targetPos, Time.deltaTime * 10f);
-
-            //Debug.Log("My : " + transform.position);
-            //Debug.Log("Target : " + targetPos);
         }
         // Directly set the position
         else
@@ -79,16 +82,16 @@ public class Dot : MonoBehaviour
         }
     }
 
-    void Disappear()
+    private void Disappear()
     {
-        if (isMatched && !isStopped)
-            m_transform.localScale -= new Vector3(0.5f, 0.5f, 0) * Time.deltaTime;
+        if (m_isMatched && !m_isStopped)
+            transform.localScale -= new Vector3(0.5f, 0.5f, 0) * Time.deltaTime;
 
-        if (m_transform.localScale.x < 0.3f)
+        if (transform.localScale.x < 0.3f)
         {
             // Fix size
-            m_transform.localScale = new Vector3(0.29f, 0.29f, 0);
-            isStopped = true;
+            transform.localScale = new Vector3(0.29f, 0.29f, 0);
+            m_isStopped = true;
         }
     }
 
@@ -100,6 +103,7 @@ public class Dot : MonoBehaviour
     private void OnMouseUp()
     {
         m_lastPosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+
         CalculateAngle();
     }
 
@@ -117,50 +121,32 @@ public class Dot : MonoBehaviour
 
     private void SetTarget()
     {
+        int prevColumn = m_column;
+        int prevRow = m_row;
+        
         // Right
         if ((-45 < m_angle && 45 >= m_angle) && Board.m_width - 1 > m_row)
         {
-            Dot rightDot = dotsArray[m_column, m_row + 1].GetComponent<Dot>();
-
-            m_targetX = backgroundArray[m_column, m_row + 1].transform.position.x;
-            rightDot.m_targetX = backgroundArray[m_column, m_row].transform.position.x;
-
-            ++m_row;
-            --rightDot.m_row;
+            board.ChangeDotlocation(prevColumn, prevRow, Board.Direction.RIGHT);
+            board.ChangeDotlocation(prevColumn, prevRow + 1, Board.Direction.LEFT);
         }
         // Up
         else if ((45 < m_angle && 135 >= m_angle) && Board.m_height - 1 > m_column)
         {
-            Dot UpDot = dotsArray[m_column + 1, m_row].GetComponent<Dot>();
-
-            m_targetY = backgroundArray[m_column + 1, m_row].transform.position.y;
-            UpDot.m_targetY = backgroundArray[m_column, m_row].transform.position.y;
-
-            ++m_column;
-            --UpDot.m_column;
+            board.ChangeDotlocation(prevColumn, prevRow, Board.Direction.UP);
+            board.ChangeDotlocation(prevColumn + 1, prevRow, Board.Direction.DOWN);
         }
         // Left
         else if ((135 < m_angle || -135 >= m_angle) && 0 < m_row)
         {
-            Dot leftDot = dotsArray[m_column, m_row - 1].GetComponent<Dot>();
-
-            m_targetX = backgroundArray[m_column, m_row - 1].transform.position.x;
-            leftDot.m_targetX = backgroundArray[m_column, m_row].transform.position.x;
-
-            --m_row;
-            ++leftDot.m_row;
+            board.ChangeDotlocation(prevColumn, prevRow, Board.Direction.LEFT);
+            board.ChangeDotlocation(prevColumn, prevRow - 1, Board.Direction.RIGHT);
         }
         // Down
         else if ((-45 > m_angle && -135 <= m_angle) && 0 < m_column)
         {
-            Dot DownDot = dotsArray[m_column - 1, m_row].GetComponent<Dot>();
-
-            m_targetY = backgroundArray[m_column - 1, m_row].transform.position.y;
-            DownDot.m_targetY = backgroundArray[m_column, m_row].transform.position.y;
-
-            --m_column;
-            ++DownDot.m_column;
+            board.ChangeDotlocation(prevColumn, prevRow, Board.Direction.DOWN);
+            board.ChangeDotlocation(prevColumn - 1, prevRow, Board.Direction.UP);
         }
     }
-
 }
