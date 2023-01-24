@@ -4,15 +4,12 @@
 TagManager:
   serializedVersion: 2
   tags:
-  - Dot_Pink
-  - Dot_Salmon
-  - Dot_Turquoise
-  - Dot_Skyblue
-  - Dot_green
-  - Dot_Orange
-  - Dot_Yellow
-  - Dot_Blue
-  - Dot_Green
+  - CandyBlue
+  - CandyGreen
+  - CandyOrange
+  - CandyPurple
+  - CandyRed
+  - CandyYellow
   layers:
   - Default
   - TransparentFX
@@ -49,10 +46,4 @@ TagManager:
   m_SortingLayers:
   - name: Default
     uniqueID: 0
-    locked: 0
-  - name: Background
-    uniqueID: 2920514099
-    locked: 0
-  - name: Dot
-    uniqueID: 3216133895
     locked: 0
