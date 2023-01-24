@@ -41,7 +41,7 @@ public class Dot : MonoBehaviour
 
         Disappear();
 
-        board.FindMatch();
+        //board.FindMatch();
     }
 
     public void OnEnable()
@@ -53,11 +53,13 @@ public class Dot : MonoBehaviour
 
     private void Move()
     {
+        float speed = 5f;
+
         // Move Towards the target
         if (Mathf.Abs(m_targetX - transform.position.x) > .1)
         {
             Vector3 targetPos = new Vector3(m_targetX, transform.position.y, 0);
-            transform.position = Vector3.Lerp(transform.position, targetPos, Time.deltaTime * 10f);
+            transform.position = Vector3.Lerp(transform.position, targetPos, Time.deltaTime * speed);
         }
         // Directly set the position
         else
@@ -71,7 +73,7 @@ public class Dot : MonoBehaviour
         if (Mathf.Abs(m_targetY - transform.position.y) > .1)
         {
             Vector3 targetPos = new Vector3(transform.position.x, m_targetY, 0);
-            transform.position = Vector3.Lerp(transform.position, targetPos, Time.deltaTime * 10f);
+            transform.position = Vector3.Lerp(transform.position, targetPos, Time.deltaTime * speed);
         }
         // Directly set the position
         else
@@ -84,8 +86,10 @@ public class Dot : MonoBehaviour
 
     private void Disappear()
     {
+        float speed = 2f;
+        
         if (m_isMatched && !m_isStopped)
-            transform.localScale -= new Vector3(0.5f, 0.5f, 0) * Time.deltaTime;
+            transform.localScale -= new Vector3(0.5f, 0.5f, 0) * Time.deltaTime * speed;
 
         if (transform.localScale.x < 0.3f)
         {

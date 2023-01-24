@@ -35,6 +35,7 @@ public class Board : MonoBehaviour
     {
         RemoveDot();
         PullDot();
+        FindMatch();
     }
 
     private void SetUp()
@@ -118,9 +119,6 @@ public class Board : MonoBehaviour
 
     private void RemoveDot()
     {
-        if (!m_isDotMatched)
-            return;
-
         for (int i = 0; i < m_height; ++i)
         {
             for (int j = 0; j < m_width; ++j)
@@ -152,9 +150,6 @@ public class Board : MonoBehaviour
                     }
                     m_dotsArray[i, j].SetActive(false);
                     m_dotsArray[i, j] = null;
-
-                   // finished match
-                   m_isDotMatched = false;
                 }
             }
         }
