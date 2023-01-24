@@ -8,14 +8,20 @@ public class Board : MonoBehaviour
     public int m_height;
     private BackgroundTile[,] allTiles;
 
-    public GameObject TilePrefab;
+    public GameObject tilePrefab;
     public GameObject[] candies;
     public GameObject[,] allCandies;
+
+    public GameObject reuse;
+    private GameObjectQueue candyQueue;
 
     void Start()
     {
         allTiles = new BackgroundTile[m_width, m_height];
         allCandies = new GameObject[m_width, m_height];
+
+        candyQueue = new GameObjectQueue();
+        candyQueue.Create(candies, reuse);
 
         SetUp();
     }
@@ -27,7 +33,7 @@ public class Board : MonoBehaviour
             for (int j = 0; j < m_height; ++j)
             {
                 Vector3 tempPosition = new Vector3(i, j, 0);
-                GameObject backgroundTile  = Instantiate(TilePrefab, tempPosition, Quaternion.identity) as GameObject;
+                GameObject backgroundTile  = Instantiate(tilePrefab, tempPosition, Quaternion.identity) as GameObject;
                 backgroundTile.transform.parent = this.transform;
                 backgroundTile.name = "( " + i + ", " + j + " )";
 
@@ -40,7 +46,7 @@ public class Board : MonoBehaviour
                 }
                 maxIteration = 0;
 
-                GameObject candy = Instantiate(candies[candyToUse], tempPosition, Quaternion.identity);
+                GameObject candy = candyQueue.GetObjectWithType(candyToUse, tempPosition);
                 candy.transform.parent = this.transform;
                 candy.name = "( " + i + ", " + j + " )";
 
