@@ -1,29 +1,29 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-
 public class Board : MonoBehaviour
 {
-    private bool m_isDotMatched = false;
-    private bool m_isPulling = false;
+    // Score text
+    private UnityEngine.UI.Text scoreText;
+    private int score;
 
-    // Background
+    // Background (for position of dots)
     public GameObject backgroundPrefab;
+    private Transform slotPanel;
     public static int m_width = 7;
     public static int m_height = 11;
-    public GameObject[,] m_slotArray = new GameObject[m_height + 1, m_width];
+    public Vector3[,] m_slotPosArr = new Vector3[m_width, m_height +1];
 
     // Dots
+    private Transform dotPanel;
     public GameObject[] dotType;
-    public GameObject[,] m_dotsArray = new GameObject[m_height, m_width];
+    public Transform[,] m_dotTransformArr = new Transform[m_width, m_height];
+    public Dot[,] m_dotsArray = new Dot[m_width, m_height];
 
     // Object Pooling
-    private static int m_poolSize = 30;
-    private LinkedList<GameObject> m_dotsPool = new LinkedList<GameObject>();
-    private Vector3 m_poolPosition = new Vector3(0f, 13f, 0f);
+    private GameObjectQueue dotQueue;
 
-    // dot's moving direction
-    public enum Direction { LEFT, RIGHT, UP, DOWN };
+    private bool m_isPulling = false;
 
     private void Start()
     {
@@ -33,166 +33,182 @@ public class Board : MonoBehaviour
 
     private void Update()
     {
-        RemoveDot();
-        PullDot();
+        // PullDot();
         FindMatch();
     }
 
     private void SetUp()
     {
-        for (int i = 0; i < m_height + 1; ++i)
+        // Object Pool
+        Transform reuse = this.transform.Find("Reuse");
+        dotQueue = new GameObjectQueue();
+        dotQueue.Create(dotType, reuse);
+
+        // Score Text
+        scoreText = GameObject.Find("Canvas/Score").GetComponent<UnityEngine.UI.Text>();
+
+        slotPanel = this.transform.Find("SlotPanel");
+        dotPanel = this.transform.Find("DotPanel");
+        
+        Vector3 boardPosition = this.transform.position;
+        for (int i = 0; i < m_width; ++i)
         {
-            for (int j = 0; j < m_width; ++j)
+            for (int j = 0; j <= m_height; ++j)
             {
-                // Make Background Array
-                Vector3 position = this.transform.position;
-                position += new Vector3(j, i, 0);
-                m_slotArray[i, j] = Instantiate(backgroundPrefab, position, this.transform.rotation);
-                m_slotArray[i, j].transform.name = "BG(" + i + ',' + j + ')';
-                m_slotArray[i, j].transform.parent = this.transform;
+                // Create Background Array
+                Vector3 position = boardPosition + new Vector3(i, j, 0);
+                CreateSlot(i, j, position);
 
                 // Extra slot for background array
-                if (m_height == i)
+                if (j == m_height)
                     continue;
 
-                // Dots
-                int random = Random.Range(0, dotType.Length);
-                m_dotsArray[i, j] = Instantiate(dotType[random], position, this.transform.rotation);
-                m_dotsArray[i, j].transform.parent = this.transform;
-                m_dotsArray[i, j].name = "Dot (" + i + ',' + j + ')';
-                m_dotsArray[i, j].GetComponent<Dot>().m_column = i;
-                m_dotsArray[i, j].GetComponent<Dot>().m_row = j;
+                // Create Dots
+                CreateDot(i, j, position);
             }
         }
+    }
 
-        // Object Pool
-        m_poolPosition += this.transform.position;
-        for (int i = 0; i < m_poolSize; ++i)
-        {
-            int random = Random.Range(0, dotType.Length);
-            GameObject extraDot = Instantiate(dotType[random], m_poolPosition, this.transform.rotation);
-            extraDot.transform.parent = this.transform;
-            m_dotsPool.AddLast(extraDot);
-        }
+    private void CreateSlot(int row, int column, Vector3 position) 
+    {
+        GameObject slotObj = Instantiate(backgroundPrefab, position, this.transform.rotation);
+        slotObj.name = "BG(" + row + ',' + column + ')';
+        slotObj.transform.parent = slotPanel;
+        m_slotPosArr[row, column] = position;
+    }
+
+    private Dot CreateDot(int row, int column, Vector3 position)
+    {
+        int randomType = Random.Range(0, dotType.Length);
+        GameObject dotObj = dotQueue.GetObjectWithType(randomType, position);
+        dotObj.name = "Dot (" + row + ',' + column + ')';
+        Transform dotTransform = dotObj.transform;
+        dotTransform.parent = dotPanel;
+        m_dotTransformArr[row, column] = dotTransform;
+        
+        Dot dot = dotObj.GetComponent<Dot>();
+        dot.Initialize(row, column, randomType);
+        m_dotsArray[row, column] = dot;
+        return dot;
     }
 
     public void FindMatch()
     {
-        if (m_isPulling)
+        if (m_isPulling) {
             return;
-
-        for (int i = 0; i < m_height; ++i)
+        }
+        for (int i = 0; i < m_width; ++i)
         {
-            for (int j = 0; j < m_width; ++j)
+            for (int j = 0; j < m_height; ++j)
             {
-                // Find Row Match
-                if (j > 0 && j < m_width - 1)
-                {
-                    if ((m_dotsArray[i, j - 1].tag == m_dotsArray[i, j].tag)
-                        && (m_dotsArray[i, j].tag == m_dotsArray[i, j + 1].tag)
-                        && (m_dotsArray[i, j].tag == m_dotsArray[i, j + 1].tag))
-                    {
-                        m_dotsArray[i, j - 1].GetComponent<Dot>().m_isMatched = true;
-                        m_dotsArray[i, j].GetComponent<Dot>().m_isMatched = true;
-                        m_dotsArray[i, j + 1].GetComponent<Dot>().m_isMatched = true;
+                Dot dot = m_dotsArray[i, j];
+                if (dot == null || dot.IsMoving()) {
+                    // if the dot is moving, skip
+                    continue;
+                }
 
-                        m_isDotMatched = true;
+                int dotType = dot.GetType();
+                // Find Row Match
+                if (i > 0 && i < m_width - 1 ) {
+                    Dot leftDot = GetNeighborDot(i, j, Enum.Direction.LEFT);
+                    Dot rightDot = GetNeighborDot(i, j, Enum.Direction.RIGHT);
+
+                    if ( leftDot != null && rightDot != null && 
+                    !leftDot.IsMoving() && !rightDot.IsMoving() &&
+                    leftDot.GetType() == dotType && rightDot.GetType() == dotType) {
+                        // Match!
+                        leftDot.Match();
+                        dot.Match();
+                        rightDot.Match();
                     }
                 }
 
                 // Find Column Match
-                if (i > 0 && i < m_height - 1)
-                {
-                    if ((m_dotsArray[i - 1, j].tag == m_dotsArray[i, j].tag)
-                        && (m_dotsArray[i, j].tag == m_dotsArray[i + 1, j].tag))
-                    {
-                        m_dotsArray[i - 1, j].GetComponent<Dot>().m_isMatched = true;
-                        m_dotsArray[i, j].GetComponent<Dot>().m_isMatched = true;
-                        m_dotsArray[i + 1, j].GetComponent<Dot>().m_isMatched = true;
+                if ( j > 0 && j < m_height - 1 ) {
+                    Dot upDot = GetNeighborDot(i, j, Enum.Direction.UP);
+                    Dot downDot = GetNeighborDot(i, j, Enum.Direction.DOWN);
 
-                        m_isDotMatched = true;
+                    if ( upDot != null && downDot != null && !upDot.IsMoving() && !downDot.IsMoving() &&
+                    upDot.GetType() == dotType && downDot.GetType() == dotType) {
+                        // Match!
+                        upDot.Match();
+                        dot.Match();
+                        downDot.Match();
                     }
                 }
             }
         }
     }
 
-    private void RemoveDot()
-    {
-        for (int i = 0; i < m_height; ++i)
-        {
-            for (int j = 0; j < m_width; ++j)
-            {
-                // Dot finished Match and Resize
-                if (true == m_dotsArray[i, j].GetComponent<Dot>().m_isStopped)
-                {
-                    // go to Dot Pool
-
-                    int randomIndex = Random.Range(0, 4);
-
-                    // 4 choices
-                    {
-                        switch (randomIndex)
-                        {
-                            case 0:
-                                m_dotsPool.AddBefore(m_dotsPool.First, m_dotsArray[i, j]);
-                                break;
-                            case 1:
-                                m_dotsPool.AddAfter(m_dotsPool.First, m_dotsArray[i, j]);
-                                break;
-                            case 2:
-                                m_dotsPool.AddBefore(m_dotsPool.Last, m_dotsArray[i, j]);
-                                break;
-                            default:
-                                m_dotsPool.AddAfter(m_dotsPool.Last, m_dotsArray[i, j]);
-                                break;
-                        }
-                    }
-                    m_dotsArray[i, j].SetActive(false);
-                    m_dotsArray[i, j] = null;
+    public Dot GetNeighborDot( int row, int column, Enum.Direction neighborDir ) {
+        switch (neighborDir) {
+            case Enum.Direction.LEFT : 
+                if (row > 0) {
+                    return m_dotsArray[row - 1, column];
                 }
-            }
+                break;
+            case Enum.Direction.RIGHT :
+                if (row < m_width - 1) {
+                    return m_dotsArray[row+1, column];
+                }
+                break;
+            case Enum.Direction.UP :
+                if (column < m_height - 1) {
+                    return m_dotsArray[row, column+1];
+                }
+                break;
+            case Enum.Direction.DOWN :
+                if (column > 0) {
+                    return m_dotsArray[row, column-1];
+                }
+                break;
         }
+
+        // error
+        Debug.Log( "error - row : "+row+" column : "+column+" dir : "+neighborDir);
+        return null;
+    }
+
+    public void RemoveDot(int row, int column, int dotType)
+    {
+        // go to Dot Pool
+        Transform dotTransform = m_dotTransformArr[row, column];
+        if (dotTransform != null) {
+            dotQueue.HideObject(m_dotTransformArr[row, column], dotType);
+        }
+        m_dotTransformArr[row, column] = null;
+        m_dotsArray[row, column] = null;
+    }
+
+    private void SetPosition(int row, int column, Dot dot)
+    {
+        m_dotTransformArr[row, column] = dot.transform;
+        m_dotsArray[row, column] = dot;
     }
 
     private void PullDot()
     {
+        m_isPulling = true;
         // check every column first
-        for (int j = 0; j < m_width; ++j)
+        for (int i = 0; i < m_width; ++i)
         {
-            for (int i = 0; i < m_height; ++i)
+            for (int j = 0; j < m_height; ++j)
             {
-                // if a slot has empty
-                if (null == m_dotsArray[i,j])
+                // if a slot is empty
+                if (m_dotsArray[i,j] == null)
                 {
-                    for (int k = i + 1; k < m_height + 1; ++k)
+                    for (int k = j + 1; k < m_height; ++k)
                     {
-                        // if a dot in top row is null
-                        if (k == m_height)
+                        Debug.Log( "PullDot i : "+i+" j : "+j+" k : "+k);
+                        Dot upDot = m_dotsArray[i, k];
+                        if (upDot == null) 
                         {
-                            m_dotsArray[i, j] = m_dotsPool.First.Value;
-                            m_dotsArray[i, j].transform.position = m_slotArray[k, j].transform.position;
-                            m_dotsArray[i, j].GetComponent<Dot>().m_targetX = m_slotArray[i, j].transform.position.x;
-                            m_dotsArray[i, j].GetComponent<Dot>().m_targetY = m_slotArray[i, j].transform.position.y;
-                            m_dotsArray[i, j].GetComponent<Dot>().m_column = i;
-                            m_dotsArray[i, j].GetComponent<Dot>().m_row = j;
-                            m_dotsArray[i, j].SetActive(true);
-
-                            m_dotsArray[i, j].name = "Clone (" + i + ',' + j + ")";
-
-                            m_dotsPool.RemoveFirst();
-                            break;
+                            // create Dot
+                            upDot = CreateDot(i, k, m_slotPosArr[i, m_height]);
                         }
-                        else if (null != m_dotsArray[k, j])
-                        {
-                            Dot dot = m_dotsArray[k, j].GetComponent<Dot>();
-                            FallDownDot(dot, i, j);
-                            m_dotsArray[i, j] = m_dotsArray[k, j];
-                            m_dotsArray[i, j].name = "Modified (" + i + ',' + j + ")";
 
-                            m_dotsArray[k, j] = null;
-                            break;
-                        }
+                        // move down
+                        ChangeDotLocation(upDot, i, k-1, Enum.Direction.DOWN);
                     }
                 }
             }
@@ -200,35 +216,33 @@ public class Board : MonoBehaviour
         m_isPulling = false;
     }
 
-    private void FallDownDot(Dot dot, int column, int row)
+    public void ChangeDotLocation(Dot dot, int row, int column, Enum.Direction dir)
     {
-        dot.m_targetY = m_slotArray[column, row].transform.position.y;
-        dot.m_column = column;
-    }
-
-    public void ChangeDotlocation(int column, int row, Direction dir)
-    {
-        Dot dot = m_dotsArray[column, row].GetComponent<Dot>();
-
         switch (dir)
         {
-            case Direction.LEFT:
-                dot.m_targetX = m_slotArray[column, row - 1].transform.position.x;
-                --(dot.m_row);
+            case Enum.Direction.LEFT:
+                Debug.Log( "LEFT - row : "+(row-1)+" column : "+column);
+                dot.SetTargetX(m_slotPosArr[row - 1, column].x);
+                dot.SetRow(row - 1);
+                SetPosition(row - 1, column, dot);
                 break;
-            case Direction.RIGHT:
-                dot.m_targetX = m_slotArray[column, row + 1].transform.position.x;
-                ++(dot.m_row);
+            case Enum.Direction.RIGHT:
+                Debug.Log( "RIGHT - row : "+(row+1)+" column : "+column);
+                dot.SetTargetX(m_slotPosArr[row + 1, column].x);
+                dot.SetRow(row + 1);
+                SetPosition(row + 1, column, dot);
                 break;
-            case Direction.UP:
-                dot.m_targetY = m_slotArray[column + 1, row].transform.position.y;
-                ++(dot.m_column);
+            case Enum.Direction.UP:
+                Debug.Log( "UP - row : "+row+" column : "+(column+1));
+                dot.SetTargetY(m_slotPosArr[row, column + 1].y);
+                dot.SetColumn(column + 1);
+                SetPosition(row, column + 1, dot);
                 break;
-            case Direction.DOWN:
-                dot.m_targetY = m_slotArray[column - 1, row].transform.position.y;
-                --(dot.m_column);
-                break;
-            default:
+            case Enum.Direction.DOWN:
+                Debug.Log( "DOWN - row : "+row+" column : "+(column-1));
+                dot.SetTargetY(m_slotPosArr[row, column - 1].y);
+                dot.SetColumn(column - 1);
+                SetPosition(row, column - 1, dot);
                 break;
         }
     }
