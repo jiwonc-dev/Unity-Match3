@@ -4,6 +4,10 @@ using UnityEngine;
 
 public class Board : MonoBehaviour
 {
+    // score text
+    private UnityEngine.UI.Text scoreText;
+    private int score;
+    
     private bool m_isDotMatched = false;
     private bool m_isPulling = false;
 
@@ -23,10 +27,11 @@ public class Board : MonoBehaviour
     private Vector3 m_poolPosition = new Vector3(0f, 13f, 0f);
 
     // dot's moving direction
-    public enum Direction { LEFT, RIGHT, UP, DOWN };
+    public enum Direction { NONE, LEFT, RIGHT, UP, DOWN };
 
     private void Start()
     {
+        scoreText = GameObject.Find("Canvas/Score").GetComponent<UnityEngine.UI.Text>();
         SetUp();
         FindMatch();
     }
@@ -231,5 +236,10 @@ public class Board : MonoBehaviour
             default:
                 break;
         }
+    }
+
+    public void AddScore(int num) {
+        score += num;
+        scoreText.text = score.ToString();
     }
 }
