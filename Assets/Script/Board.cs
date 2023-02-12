@@ -33,7 +33,7 @@ public class Board : MonoBehaviour
 
     private void Update()
     {
-        // PullDot();
+        PullDot();
         FindMatch();
     }
 
@@ -140,6 +140,12 @@ public class Board : MonoBehaviour
         }
     }
 
+    public void AddScore() 
+    {
+        score++;
+        scoreText.text = score.ToString();
+    }
+
     public Dot GetNeighborDot( int row, int column, Enum.Direction neighborDir ) {
         switch (neighborDir) {
             case Enum.Direction.LEFT : 
@@ -188,6 +194,9 @@ public class Board : MonoBehaviour
 
     private void PullDot()
     {
+        if (m_isPulling) {
+            return;
+        }
         m_isPulling = true;
         // check every column first
         for (int i = 0; i < m_width; ++i)
@@ -197,9 +206,9 @@ public class Board : MonoBehaviour
                 // if a slot is empty
                 if (m_dotsArray[i,j] == null)
                 {
+                    int newJ = j;
                     for (int k = j + 1; k < m_height; ++k)
                     {
-                        Debug.Log( "PullDot i : "+i+" j : "+j+" k : "+k);
                         Dot upDot = m_dotsArray[i, k];
                         if (upDot == null) 
                         {
@@ -207,8 +216,11 @@ public class Board : MonoBehaviour
                             upDot = CreateDot(i, k, m_slotPosArr[i, m_height]);
                         }
 
+                        Debug.Log( "PullDot i : "+i+" j : "+newJ+" k : "+k);
+                        Debug.Log( "SetTargetY : "+m_slotPosArr[i, newJ].y);
+                        Debug.Log( "SetColumn : "+newJ);
                         // move down
-                        ChangeDotLocation(upDot, i, k-1, Enum.Direction.DOWN);
+                        ChangeDotLocation(upDot, i, newJ++, Enum.Direction.DOWN);
                     }
                 }
             }

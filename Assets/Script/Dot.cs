@@ -80,8 +80,8 @@ public class Dot : MonoBehaviour
         m_targetX = x;
     }
 
-    public void SetTargetY(float x) {
-        m_targetX = x;
+    public void SetTargetY(float y) {
+        m_targetY = y;
     }
 
     public void SetRow(int row) {
@@ -154,7 +154,7 @@ public class Dot : MonoBehaviour
             transform.localScale = new Vector3(0.3f, 0.3f, 0);
 
             // release()
-            board.AddScore(1);
+            board.AddScore();
             board.RemoveDot(m_row, m_column, m_type);
         }
     }
