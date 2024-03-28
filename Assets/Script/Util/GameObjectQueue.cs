@@ -17,7 +17,7 @@ public class GameObjectQueue
         reuseTransform = reuse;
     }
 
-    public GameObject GetObjectWithType(int objectType, Vector3 position) {
+    public GameObject GetObjectWithType(int objectType, Vector2 position) {
         if (objectDict[objectType].Count == 0) {
             return UnityEngine.Object.Instantiate(prefabArr[objectType], position, Quaternion.identity);
         } else {

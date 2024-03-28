@@ -4,10 +4,11 @@ using UnityEngine;
 
 public class Dot : MonoBehaviour
 {
+    public RectTransform rect;
     private int m_column;
     private int m_row;
     private int m_type;
-    private Enum.Direction m_dir;
+    private Enum.Direction m_dir = Enum.Direction.NONE;
 
     private int m_prevColumn;
     private int m_prevRow;
@@ -18,8 +19,11 @@ public class Dot : MonoBehaviour
     private float m_targetX;
     private float m_targetY;
 
-    private bool m_isMatched = false;
+    private bool m_rowMatched = false;
+    private bool m_colMatched = false;
     public bool m_isSelected = false;
+    private bool m_needToMoveX = false;
+    private bool m_needToMoveY = false;
     private bool m_isMoving = false;
 
     private Board board;
@@ -31,15 +35,12 @@ public class Dot : MonoBehaviour
     private float m_angle;
     private float m_swipeResist = 0.5f;
 
-    private const float m_speed = 5f;
+    private const float m_speed = 0.5f;
 
     private void Start()
     {
         board = GameObject.Find("BoardManager").GetComponent<Board>();
-
-        m_targetX = transform.position.x;
-        m_targetY = transform.position.y;
-        m_dir = Enum.Direction.NONE;
+        rect = this.GetComponent<RectTransform>();
     }
 
     private void Update()
@@ -53,10 +54,24 @@ public class Dot : MonoBehaviour
 
     public void OnEnable()
     {
-        m_isMatched = false;
-        m_isMoving = false;
         transform.localScale = new Vector3(1f, 1f, 0);
+        rect = this.GetComponent<RectTransform>();
+
+        Vector2 startPos = rect.anchoredPosition;
+        m_targetX = startPos.x;
+        m_targetY = startPos.y;
     }
+
+    public void OnDisable() {
+        m_rowMatched = false;
+        m_colMatched = false;
+        m_isSelected = false;
+        m_needToMoveX = false;
+        m_needToMoveY = false;
+        m_isMoving = false;
+        m_dir = Enum.Direction.NONE;
+    }
+
     public void Initialize(int row, int column, int type)
     {
         m_row = row;
@@ -68,8 +83,19 @@ public class Dot : MonoBehaviour
         return m_type;
     }
 
-    public void Match() {
-        m_isMatched = true;
+    public int GetRow() {
+        return m_row;
+    }
+
+    public int GetColumn() {
+        return m_column;
+    }
+
+    public void RowMatch() {
+        m_rowMatched = true;
+    }
+    public void ColumnMatch() {
+        m_colMatched = true;
     }
 
     public bool IsMoving() {
@@ -78,10 +104,12 @@ public class Dot : MonoBehaviour
 
     public void SetTargetX(float x) {
         m_targetX = x;
+        m_needToMoveX = true;
     }
 
     public void SetTargetY(float y) {
         m_targetY = y;
+        m_needToMoveY = true;
     }
 
     public void SetRow(int row) {
@@ -90,54 +118,52 @@ public class Dot : MonoBehaviour
     public void SetColumn(int column) {
         m_column = column;
     }
-    // public int GetRow() {
-    //     return m_row;
-    // }
-    // public int GetColumn() {
-    //     return m_column;
-    // }
-
 
     private void Move()
     {
         m_isMoving = false;
 
-        // Move Towards the target
-        if (Mathf.Abs(m_targetX - transform.position.x) > .1)
-        {
-            m_isMoving = true;
-            Vector3 targetPos = new Vector3(m_targetX, transform.position.y, 0);
-            transform.position = Vector3.Lerp(transform.position, targetPos, Time.deltaTime * m_speed);
-        }
-        // Directly set the position
-        else
-        {
-            Vector3 targetPos = new Vector3(m_targetX, transform.position.y, 0);
-            transform.position = targetPos;
-
-            // if (m_isSelected && !IsMatched() && m_prevDir != Enum.Direction.NONE) {
-            //     m_isSelected = false;
-            //     ChangeDotLocation(m_column, m_row, m_prevDir);
-            // }
-        }
+        Vector2 curPos = rect.anchoredPosition;
 
         // Move Towards the target
-        if (Mathf.Abs(m_targetY - transform.position.y) > .1)
-        {
-            m_isMoving = true;
-            Vector3 targetPos = new Vector3(transform.position.x, m_targetY, 0);
-            transform.position = Vector3.Lerp(transform.position, targetPos, Time.deltaTime * m_speed);
-        }
-        // Directly set the position
-        else
-        {
-            Vector3 targetPos = new Vector3(transform.position.x, m_targetY, 0);
-            transform.position = targetPos;
+        if (m_needToMoveX && Mathf.Abs(m_targetX - curPos.x) > .1)
+            {
+                m_isMoving = true;
+                Vector2 targetPos = new Vector2(m_targetX, curPos.y);
+                rect.anchoredPosition = Vector2.Lerp(curPos, targetPos, Time.deltaTime * m_speed);
+            }
+            // Directly set the position
+        else if (m_needToMoveX)
+            {
+                Vector2 targetPos = new Vector2(m_targetX, curPos.y);
+                rect.anchoredPosition = targetPos;
+                m_needToMoveX = false;
+            }
 
-            // if (m_isSelected && !IsMatched() && m_prevDir != Enum.Direction.NONE) {
-            //     m_isSelected = false;
-            //     ChangeDotLocation(m_column, m_row, m_prevDir);
-            // }
+        // Move Towards the target
+
+        if ( m_needToMoveY ) {
+            string timerID = transform.name;
+            board.AddTimer( timerID, 1, () => MoveDown( timerID ));
+            m_needToMoveY = false;
+        }
+    }
+
+    private void MoveDown(string timerID) {
+        Vector2 curPos = rect.anchoredPosition;
+        if (Mathf.Abs(m_targetY - curPos.y) > .1){
+            m_isMoving = true;
+            float nextPosY = curPos.y - m_speed;
+
+            if (nextPosY < m_targetY ) {
+                nextPosY = m_targetY;
+            }
+            rect.anchoredPosition = new Vector2(curPos.x, nextPosY);
+            Debug.Log("Move - "+transform.name+" curPosY : "+curPos.y+" targetY : "+m_targetY + " nextPosY : "+nextPosY);
+        } else {
+            Vector2 targetPos = new Vector2(curPos.x, m_targetY);
+            rect.anchoredPosition = targetPos;
+            board.RemoveTimer(timerID);
         }
     }
 
@@ -145,7 +171,7 @@ public class Dot : MonoBehaviour
     {
         float speed = 2f;
         
-        if (m_isMatched)
+        if (IsAnyMatched())
             transform.localScale -= new Vector3(0.5f, 0.5f, 0) * Time.deltaTime * speed;
 
         if (transform.localScale.x < 0.3f)
@@ -159,17 +185,16 @@ public class Dot : MonoBehaviour
         }
     }
 
-    private bool IsMatched() {
-        if (m_isMatched) {
-            Debug.Log( "(matched) m_colum : "+m_column+"m_row : "+m_row );
-            return true;
-        }
-        if (m_prevDot.IsMatched()) {
-            Debug.Log( "(matched) m_colum : "+m_column+"m_row : "+m_row+ " m_prevColumn : "+m_prevColumn+" m_prevRow : "+m_prevRow );
-        } else {
-            Debug.Log( "(not matched) m_colum : "+m_column+"m_row : "+m_row+ " m_prevColumn : "+m_prevColumn+" m_prevRow : "+m_prevRow );
-        }
-        return m_prevDot.IsMatched();
+    public bool IsAnyMatched() {
+        return (m_rowMatched || m_colMatched);
+    }
+
+    public bool IsRowMatched() {
+        return m_rowMatched;
+    }
+
+    public bool IsColMatched() {
+        return m_colMatched;
     }
 
     private void OnMouseDown()
@@ -198,9 +223,6 @@ public class Dot : MonoBehaviour
 
     private void SetTarget()
     {
-        int prevColumn = m_column;
-        int prevRow = m_row;
-        
         // Right
         if ((-45 < m_angle && 45 >= m_angle) && Board.m_width - 1 > m_row)
         {
@@ -226,33 +248,22 @@ public class Dot : MonoBehaviour
             return;
         }
         SwapDot(m_row, m_column, m_dir);
+        // board.FindMatch();
     }
 
     private void SwapDot(int row, int column, Enum.Direction dir ) {
         switch (dir){
             case Enum.Direction.LEFT :
                 board.ChangeDotLocation(this, row, column, Enum.Direction.LEFT);
-
-                m_prevDot = board.GetNeighborDot(row, column, Enum.Direction.LEFT);
-                board.ChangeDotLocation(m_prevDot, row-1, column, Enum.Direction.RIGHT);
                 break;
             case Enum.Direction.RIGHT :
                 board.ChangeDotLocation(this, row, column, Enum.Direction.RIGHT);
-
-                m_prevDot = board.GetNeighborDot(row, column, Enum.Direction.RIGHT);
-                board.ChangeDotLocation(m_prevDot, row+1, column, Enum.Direction.LEFT);
                 break;
             case Enum.Direction.UP :
                 board.ChangeDotLocation(this, row, column, Enum.Direction.UP);
-
-                m_prevDot = board.GetNeighborDot(row, column, Enum.Direction.UP);
-                board.ChangeDotLocation(m_prevDot, row, column+1, Enum.Direction.DOWN);
                 break;
             case Enum.Direction.DOWN :
                 board.ChangeDotLocation(this, row, column, Enum.Direction.DOWN);
-
-                m_prevDot = board.GetNeighborDot(row, column, Enum.Direction.DOWN);
-                board.ChangeDotLocation(m_prevDot, row, column-1, Enum.Direction.UP);
                 break;
         }
     }

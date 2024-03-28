@@ -10,20 +10,26 @@ public class Board : MonoBehaviour
     // Background (for position of dots)
     public GameObject backgroundPrefab;
     private Transform slotPanel;
-    public static int m_width = 7;
-    public static int m_height = 11;
+    // public static int m_width = 7;
+    public static int m_width = 4;
+    // public static int m_height = 11;
+    public static int m_height = 4;
     public Vector3[,] m_slotPosArr = new Vector3[m_width, m_height +1];
 
     // Dots
     private Transform dotPanel;
     public GameObject[] dotType;
-    public Transform[,] m_dotTransformArr = new Transform[m_width, m_height];
+    public RectTransform[,] m_dotTransformArr = new RectTransform[m_width, m_height];
     public Dot[,] m_dotsArray = new Dot[m_width, m_height];
 
     // Object Pooling
     private GameObjectQueue dotQueue;
 
+    // Timer
+    private Timer timer;
+
     private bool m_isPulling = false;
+    private bool m_needPull = false;
 
     private void Start()
     {
@@ -33,8 +39,9 @@ public class Board : MonoBehaviour
 
     private void Update()
     {
+        UpdateTimer();
         PullDot();
-        FindMatch();
+        // FindMatch();
     }
 
     private void SetUp()
@@ -44,51 +51,54 @@ public class Board : MonoBehaviour
         dotQueue = new GameObjectQueue();
         dotQueue.Create(dotType, reuse);
 
-        // Score Text
-        scoreText = GameObject.Find("Canvas/Score").GetComponent<UnityEngine.UI.Text>();
+        // Timer
+        timer = new Timer();
 
+        // Set variables
+        scoreText = GameObject.Find("Canvas/Score").GetComponent<UnityEngine.UI.Text>();
         slotPanel = this.transform.Find("SlotPanel");
         dotPanel = this.transform.Find("DotPanel");
-        
-        Vector3 boardPosition = this.transform.position;
-        for (int i = 0; i < m_width; ++i)
+
+        // Create Slots and Dots
+        Vector2 boardPosition = this.GetComponent<RectTransform>().anchoredPosition ;
+        for (int col = 0; col <= m_height; ++col)
         {
-            for (int j = 0; j <= m_height; ++j)
+            for (int row = 0; row < m_width; ++row)
             {
+                Vector2 position = boardPosition + new Vector2(row, col);
+
                 // Create Background Array
-                Vector3 position = boardPosition + new Vector3(i, j, 0);
-                CreateSlot(i, j, position);
+                CreateSlot(row, col, position);
 
                 // Extra slot for background array
-                if (j == m_height)
+                if (col == m_height)
                     continue;
 
                 // Create Dots
-                CreateDot(i, j, position);
+                CreateDot(row, col, position);
             }
         }
     }
 
-    private void CreateSlot(int row, int column, Vector3 position) 
+    private void CreateSlot(int row, int column, Vector2 position) 
     {
         GameObject slotObj = Instantiate(backgroundPrefab, position, this.transform.rotation);
         slotObj.name = "BG(" + row + ',' + column + ')';
-        slotObj.transform.parent = slotPanel;
+        slotObj.transform.SetParent(slotPanel);
         m_slotPosArr[row, column] = position;
     }
 
-    private Dot CreateDot(int row, int column, Vector3 position)
+    private Dot CreateDot(int row, int column, Vector2 position)
     {
         int randomType = Random.Range(0, dotType.Length);
         GameObject dotObj = dotQueue.GetObjectWithType(randomType, position);
         dotObj.name = "Dot (" + row + ',' + column + ')';
-        Transform dotTransform = dotObj.transform;
-        dotTransform.parent = dotPanel;
-        m_dotTransformArr[row, column] = dotTransform;
+        dotObj.transform.SetParent(dotPanel);
         
         Dot dot = dotObj.GetComponent<Dot>();
         dot.Initialize(row, column, randomType);
         m_dotsArray[row, column] = dot;
+        m_dotTransformArr[row, column] = dot.rect;
         return dot;
     }
 
@@ -97,43 +107,51 @@ public class Board : MonoBehaviour
         if (m_isPulling) {
             return;
         }
-        for (int i = 0; i < m_width; ++i)
+        for (int col = 0; col < m_height; ++col)
         {
-            for (int j = 0; j < m_height; ++j)
+            for (int row = 0; row < m_width; ++row)
             {
-                Dot dot = m_dotsArray[i, j];
-                if (dot == null || dot.IsMoving()) {
+                Dot dot = m_dotsArray[row, col];
+                if (!dot || dot.IsMoving()) {
                     // if the dot is moving, skip
                     continue;
                 }
 
                 int dotType = dot.GetType();
                 // Find Row Match
-                if (i > 0 && i < m_width - 1 ) {
-                    Dot leftDot = GetNeighborDot(i, j, Enum.Direction.LEFT);
-                    Dot rightDot = GetNeighborDot(i, j, Enum.Direction.RIGHT);
-
-                    if ( leftDot != null && rightDot != null && 
-                    !leftDot.IsMoving() && !rightDot.IsMoving() &&
-                    leftDot.GetType() == dotType && rightDot.GetType() == dotType) {
-                        // Match!
-                        leftDot.Match();
-                        dot.Match();
-                        rightDot.Match();
+                Dot rightDot = GetNeighborDot(row, col, Enum.Direction.RIGHT);
+                if (rightDot && !(rightDot.IsRowMatched())) {
+                    List<Dot> rowMatchList = new List<Dot>();
+                    rowMatchList.Add(dot);
+                    // Debug.Log( "colMatchList.Add() dot : "+row+ ", type : "+dotType);
+                    while (rightDot && !rightDot.IsMoving() && rightDot.GetType() == dotType) {
+                        int rightDotRow = rightDot.GetRow();
+                        // Debug.Log( "colMatchList.Add() rightColumn : "+rightDotRow+ ", type : "+rightDot.GetType());
+                        rowMatchList.Add(rightDot);
+                        rightDot = GetNeighborDot(rightDotRow, col, Enum.Direction.RIGHT);
+                    }
+                    if (rowMatchList.Count >= 3) {
+                        foreach (Dot matchedDot in rowMatchList) {
+                            // Debug.Log( "cur Row Match : []"+ matchedDot.GetRow()+ ", "+matchedDot.GetColumn()+ "]");
+                            matchedDot.RowMatch();
+                        }
                     }
                 }
 
                 // Find Column Match
-                if ( j > 0 && j < m_height - 1 ) {
-                    Dot upDot = GetNeighborDot(i, j, Enum.Direction.UP);
-                    Dot downDot = GetNeighborDot(i, j, Enum.Direction.DOWN);
-
-                    if ( upDot != null && downDot != null && !upDot.IsMoving() && !downDot.IsMoving() &&
-                    upDot.GetType() == dotType && downDot.GetType() == dotType) {
-                        // Match!
-                        upDot.Match();
-                        dot.Match();
-                        downDot.Match();
+                Dot upDot = GetNeighborDot(row, col, Enum.Direction.UP);
+                if (upDot && !(upDot.IsColMatched())) {
+                    List<Dot> colMatchList = new List<Dot>();
+                    colMatchList.Add(dot);
+                    while (upDot != null && !upDot.IsMoving() && upDot.GetType() == dotType) {
+                        int upDotColumn = upDot.GetColumn();
+                        colMatchList.Add(upDot);
+                        upDot = GetNeighborDot(row, upDotColumn,  Enum.Direction.UP);
+                    }
+                    if (colMatchList.Count >= 3) {
+                        foreach (Dot matchedDot in colMatchList) {
+                            matchedDot.ColumnMatch();
+                        }
                     }
                 }
             }
@@ -170,34 +188,34 @@ public class Board : MonoBehaviour
                 break;
         }
 
-        // error
-        Debug.Log( "error - row : "+row+" column : "+column+" dir : "+neighborDir);
         return null;
     }
 
     public void RemoveDot(int row, int column, int dotType)
     {
         // go to Dot Pool
-        Transform dotTransform = m_dotTransformArr[row, column];
+        RectTransform dotTransform = m_dotTransformArr[row, column];
         if (dotTransform != null) {
             dotQueue.HideObject(m_dotTransformArr[row, column], dotType);
         }
         m_dotTransformArr[row, column] = null;
         m_dotsArray[row, column] = null;
+        m_needPull = true;
     }
 
     private void SetPosition(int row, int column, Dot dot)
     {
-        m_dotTransformArr[row, column] = dot.transform;
+        m_dotTransformArr[row, column] = dot.rect;
         m_dotsArray[row, column] = dot;
     }
 
     private void PullDot()
     {
-        if (m_isPulling) {
+        if (m_isPulling || !m_needPull) {
             return;
         }
         m_isPulling = true;
+
         // check every column first
         for (int i = 0; i < m_width; ++i)
         {
@@ -207,25 +225,35 @@ public class Board : MonoBehaviour
                 if (m_dotsArray[i,j] == null)
                 {
                     int newJ = j;
-                    for (int k = j + 1; k < m_height; ++k)
+                    for (int k = j + 1; k <= m_height; ++k)
                     {
-                        Dot upDot = m_dotsArray[i, k];
-                        if (upDot == null) 
-                        {
+                        Dot upDot = null;
+                        bool breaktheloop = false;
+                        if (k >= m_height - 1) {
                             // create Dot
-                            upDot = CreateDot(i, k, m_slotPosArr[i, m_height]);
+                            upDot = CreateDot(i, newJ, m_slotPosArr[i, m_height]);
+                            breaktheloop = true;
+                        } else {
+                            upDot = m_dotsArray[i, k];
                         }
 
-                        Debug.Log( "PullDot i : "+i+" j : "+newJ+" k : "+k);
-                        Debug.Log( "SetTargetY : "+m_slotPosArr[i, newJ].y);
-                        Debug.Log( "SetColumn : "+newJ);
-                        // move down
-                        ChangeDotLocation(upDot, i, newJ++, Enum.Direction.DOWN);
+                        if (upDot != null) {
+                            upDot.transform.name = "Dot ("+i+","+newJ+") new";
+                            upDot.SetTargetY(m_slotPosArr[i, newJ].y);
+                            upDot.SetColumn(newJ);
+                            SetPosition(i, newJ, upDot);
+
+                            newJ++;
+                        }
+                        if (breaktheloop) {
+                            break;
+                        }
                     }
                 }
             }
         }
         m_isPulling = false;
+        m_needPull = false;
     }
 
     public void ChangeDotLocation(Dot dot, int row, int column, Enum.Direction dir)
@@ -233,29 +261,40 @@ public class Board : MonoBehaviour
         switch (dir)
         {
             case Enum.Direction.LEFT:
-                Debug.Log( "LEFT - row : "+(row-1)+" column : "+column);
                 dot.SetTargetX(m_slotPosArr[row - 1, column].x);
                 dot.SetRow(row - 1);
                 SetPosition(row - 1, column, dot);
                 break;
             case Enum.Direction.RIGHT:
-                Debug.Log( "RIGHT - row : "+(row+1)+" column : "+column);
                 dot.SetTargetX(m_slotPosArr[row + 1, column].x);
                 dot.SetRow(row + 1);
                 SetPosition(row + 1, column, dot);
                 break;
             case Enum.Direction.UP:
-                Debug.Log( "UP - row : "+row+" column : "+(column+1));
                 dot.SetTargetY(m_slotPosArr[row, column + 1].y);
                 dot.SetColumn(column + 1);
                 SetPosition(row, column + 1, dot);
                 break;
             case Enum.Direction.DOWN:
-                Debug.Log( "DOWN - row : "+row+" column : "+(column-1));
                 dot.SetTargetY(m_slotPosArr[row, column - 1].y);
                 dot.SetColumn(column - 1);
                 SetPosition(row, column - 1, dot);
                 break;
         }
+    }
+
+    public void AddTimer(string timerID, float durationSec, System.Action timeF)
+    {
+        timer.AddTimer(timerID, durationSec, timeF);
+    }
+
+    public void RemoveTimer(string timerID)
+    {
+        timer.RemoveTimer(timerID);
+    }
+
+    private void UpdateTimer()
+    {
+        timer.Update();
     }
 }
